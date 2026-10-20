@@ -4,77 +4,101 @@ import plotly.express as px
 import pandas as pd
 from src.etl import load_and_clean_data
 
-# ---------- تنظیمات صفحه ----------
+# ---------- Page configuration ----------
 st.set_page_config(
-    page_title="داشبورد تحلیل فروش | A_srt343",
+    page_title="Sales Intelligence | A_srt343",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# ---------- استایل سفارشی ----------
+# ---------- Professional custom styling ----------
 st.markdown("""
 <style>
-    .main-header { font-size: 2.5rem; color: #1f77b4; text-align: center; }
+    .block-container { padding-top: 2rem; }
+    div[data-testid="stMetric"] {
+        background: linear-gradient(135deg, #1E2530 0%, #0E1117 100%);
+        border: 1px solid #2E3A4A;
+        border-radius: 12px;
+        padding: 15px 20px;
+    }
+    div[data-testid="stMetricLabel"] { font-size: 0.85rem; color: #8899AA; }
+    div[data-testid="stMetricValue"] { font-size: 1.8rem; color: #00D4AA; }
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #1E2530;
+        border-radius: 8px;
+        padding: 8px 20px;
+    }
+    .main-header { font-size: 2.3rem; color: #00D4AA; text-align: center; margin-bottom: 0.5rem; }
     .footer { text-align: center; font-size: 0.9rem; color: gray; margin-top: 50px; }
+    footer { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- بارگذاری داده (کش‌شده) ----------
+
+# ---------- Load data (cached) ----------
 @st.cache_data
 def get_data():
     return load_and_clean_data()
 
+
 df = get_data()
 
-# ---------- هدر ----------
-st.markdown('<h1 class="main-header">📊 داشبورد تحلیل فروش Superstore</h1>', unsafe_allow_html=True)
-st.markdown("**ساخته شده توسط A_srt343** | [Instagram](https://instagram.com/project_srt343)")
 
-# ---------- فیلترهای کناری ----------
-st.sidebar.header("🔍 فیلترها")
-regions = st.sidebar.multiselect("منطقه", options=df["Region"].unique(), default=df["Region"].unique())
-categories = st.sidebar.multiselect("دسته‌بندی", options=df["Category"].unique(), default=df["Category"].unique())
+# ---------- Navigation ----------
+pg = st.navigation([
+    st.Page("pages/1_📊_Overview.py",  title="Overview", icon="📊", default=True),
+    st.Page("pages/2_📈_Trends.py",    title="Trends",   icon="📈"),
+    st.Page("pages/3_🗺️_Geography.py", title="Geography", icon="🗺️"),
+    st.Page("pages/4_🔍_Explorer.py",  title="Data Explorer", icon="🔍"),
+])
 
-df_filtered = df[(df["Region"].isin(regions)) & (df["Category"].isin(categories))]
 
-# ---------- KPI ها ----------
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("💰 کل فروش", f"${df_filtered['Sales'].sum():,.0f}")
-col2.metric("📈 کل سود", f"${df_filtered['Profit'].sum():,.0f}")
-col3.metric("📦 تعداد سفارش", f"{len(df_filtered):,}")
-col4.metric("📊 حاشیه سود", f"{(df_filtered['Profit'].sum() / df_filtered['Sales'].sum() * 100):.1f}%")
+# ---------- Sidebar Branding + Global filters ----------
+with st.sidebar:
+    st.markdown("### 📊 Sales Intelligence")
+    st.caption("Superstore sales analytics dashboard")
+    st.divider()
 
-st.divider()
+    st.markdown("#### 🔍 Filters")
+    regions = st.multiselect(
+        "Region",
+        options=df["Region"].unique(),
+        default=df["Region"].unique(),
+        key="filter_regions",
+    )
+    categories = st.multiselect(
+        "Category",
+        options=df["Category"].unique(),
+        default=df["Category"].unique(),
+        key="filter_categories",
+    )
 
-# ---------- نمودار ۱: فروش بر اساس دسته‌بندی ----------
-st.subheader("📦 فروش بر اساس دسته‌بندی")
-fig1 = px.bar(
-    df_filtered.groupby("Category")["Sales"].sum().reset_index(),
-    x="Category", y="Sales", color="Category",
-    text_auto=".2s", template="plotly_white"
-)
-st.plotly_chart(fig1, use_container_width=True)
+    st.divider()
+    st.caption("Built by **A_srt343**")
+    st.caption("Instagram: [@project_srt343](https://instagram.com/project_srt343)")
 
-# ---------- نمودار ۲: روند فروش ماهانه ----------
-st.subheader("📅 روند فروش ماهانه")
-monthly = df_filtered.groupby(["Year", "Month"])["Sales"].sum().reset_index()
-monthly["Date"] = pd.to_datetime(monthly[["Year", "Month"]].assign(day=1))
-fig2 = px.line(monthly, x="Date", y="Sales", markers=True, template="plotly_white")
-st.plotly_chart(fig2, use_container_width=True)
 
-# ---------- نمودار ۳: سود بر اساس منطقه ----------
-st.subheader("🗺️ سود بر اساس منطقه")
-fig3 = px.pie(
-    df_filtered.groupby("Region")["Profit"].sum().reset_index(),
-    names="Region", values="Profit", hole=0.4, template="plotly_white"
-)
-st.plotly_chart(fig3, use_container_width=True)
+# ---------- Global filtering (stored in session_state so pages can access it) ----------
+df_filtered = df[
+    (df["Region"].isin(regions)) & (df["Category"].isin(categories))
+].copy()
 
-# ---------- فوتر ----------
+# Store in session_state for use across pages
+st.session_state["df_filtered"] = df_filtered
+st.session_state["regions"] = regions
+st.session_state["categories"] = categories
+
+
+# ---------- Run the selected page ----------
+pg.run()
+
+
+# ---------- Footer ----------
 st.markdown("""
 <div class="footer">
-    Built with ❤️ by A_srt343<br>
+    Built with ❤️ by <b>A_srt343</b><br>
     Instagram: @project_srt343
 </div>
 """, unsafe_allow_html=True)
